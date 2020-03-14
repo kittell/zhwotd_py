@@ -6,6 +6,7 @@ Created on Mar 12, 2020
 
 import mysql.connector
 import configparser
+from builtins import None
 
 
 # GENERAL DATABASE FUNCTIONS
@@ -99,21 +100,44 @@ class Dictionary_DB:
     def __init__(self):
         self.name = "dictionary"
     
-    def is_term_in_dictionary_db(self, term):
+    def is_term_in_dictionary(self, term):
         q_result = select_term(term.term)
         result = False
         if len(q_result) > 0:
             result = True
         return result
         
-#     def add_term_to_dictionary(self, term_dict):
+    def add_terms_to_dictionary(self, terms):
+        # TODO: show details in console about what was added and not added
         
-        
+        # Look for terms missing from dictionary, and add them
+        for term in terms:
+            if self.is_term_in_dictionary(term) == True:
+                print("Not added: {} is already in dictionary".format(term.term))
+            else:
+                print("Added: {}".format(term.term))
 
 class Term:
-    def __init__(self, term):
-        self.term = term
-
+    def __init__(self, term_dict):
+        # Required
+        # TODO: stop operation if this is empty
+        self.term = term_dict['term']
+        
+        # Sort of optional -- important, but don't stop operation for now
+        self.pinyin = None
+        self.definition = None
+        if 'pinyin' in term_dict:
+            self.pinyin = term_dict['pinyin']
+        if 'definition' in term_dict:
+            self.definition = term_dict['definition']
+        
+        # Optional
+        self.traditional = None
+        self.hsk = None
+        if 'traditional' in term_dict:
+            self.traditional = term_dict['traditional']
+        if 'hsk' in term_dict:
+            self.hsk = term_dict['hsk']
 
 # DASHBOARD
 wotd_db = WOTD_DB()
@@ -133,7 +157,7 @@ def test_function():
 
 def test_function2():
     t = Term(term="能力")
-    result = dict_db.is_term_in_dictionary_db(t)
+    result = dict_db.is_term_in_dictionary(t)
     
     x = "is not in database"
     if result > 0:
