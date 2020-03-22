@@ -6,7 +6,6 @@ Created on Mar 12, 2020
 
 import mysql.connector
 import configparser
-from builtins import None
 
 
 # GENERAL DATABASE FUNCTIONS
@@ -143,9 +142,11 @@ class Term:
 wotd_db = WOTD_DB()
 dict_db = Dictionary_DB()
 
+
 # TEST
     
 def test_function():
+    # out-of-date - term input needs to be dict
     t = Term(term="能力")
     result = wotd_db.count_term_in_wotd_db(t)
     
@@ -156,6 +157,7 @@ def test_function():
     return 
 
 def test_function2():
+    # out-of-date - term input needs to be dict
     t = Term(term="能力")
     result = dict_db.is_term_in_dictionary(t)
     
@@ -164,6 +166,3 @@ def test_function2():
         x = "is in database"
     print("{} {}".format(t.term, x))
     return 
-
-test_function()
-test_function2()
