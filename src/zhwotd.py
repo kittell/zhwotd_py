@@ -6,7 +6,10 @@ Created on Mar 12, 2020
 
 import mysql.connector
 import configparser
-
+from os.path import expanduser, join
+import csv
+from datetime import datetime, date, timedelta
+from dateutil import parser
 
 # GENERAL DATABASE FUNCTIONS
 def connect_to_db():
@@ -138,6 +141,169 @@ class Term:
         if 'hsk' in term_dict:
             self.hsk = term_dict['hsk']
 
+class InputParser:
+    def __init__(self):
+        pass
+    
+    def get_input_file_settings(self):
+        input_dir = expanduser('~')
+        input_dir = join(input_dir,'Dropbox','zhwotd')
+        
+        input_file_dictionary = 'zhwotd_input_dictionary.csv'
+        input_filepath_dictionary = join(input_dir, input_file_dictionary)
+        
+        input_file_wotd = 'zhwotd_input_wotd.txt'
+        input_filepath_wotd = join(input_dir, input_file_wotd)
+        
+        print(input_filepath_dictionary)
+        print(input_filepath_wotd)
+        
+    def parse_dictionary_input_csv(self, input_filepath):
+        result = ''
+        header = list()
+        
+        with open(input_filepath, newline='', encoding='utf8') as f:
+            reader = csv.reader(f)
+            col_pinyin = 0
+            col_hsk = 0
+            record_list = list()
+            row_count = -1
+            
+            for row in reader:
+                row_count += 1
+                col_count = -1
+                row_result = list()
+                
+                for col in row:
+                    col_count += 1
+                    
+                    if row_count == 0:
+                        # Get header information from first row
+                        header.append(col)
+                        
+                        # Note which column contains pinyin entries
+                        if col == 'pinyin':
+                            col_pinyin = col_count
+                        elif col == 'hsk':
+                            col_hsk = col_count
+                    
+                    else:
+                        if col_count == col_pinyin:
+                            # Parse pinyin entry
+                            col = parse_pinyin_entry(col)
+                        elif col_count == col_hsk and col_count == '':
+                            # if this entry is blank, set it to zero
+                            col = '0'
+    
+                        row_result.append(col)
+                        
+                
+                # Pack row_result into record_list
+                if row_count > 0:
+                    record_list.append(row_result)
+        
+        # After extracting info from file, create the SQL query
+        result = pack_sql_insert('dictionary', header, record_list)
+                    
+        return result
+    
+    
+    def parse_wotd_input(self, input_filepath):
+        # Input is a list of words, one per line
+        # No dates given--ask user for first date in the series
+        
+        # Build attribute list
+        attribute_list = ['date', 'word']
+        
+        start_date_str = input('Start date:')
+        # TODO: if input blank, use today
+        # TODO: if input blank, query the database, use the next blank day
+        if start_date_str.lower() == 'today':
+            start_date = date.today()
+        elif start_date_str.lower() == 'tomorrow':
+            start_date = date.today() + timedelta(days=1)
+        else:
+            start_date = parser.parse(start_date_str)
+        print(start_date)
+        
+        # Read data from file
+        # TODO: if file is empty, give user prompt to enter words
+        wotd_list = list()
+        with open(input_filepath_wotd) as f:
+            for line in f:
+                line_final = line.strip()
+                wotd_list.append(line_final)
+                
+        # Combine dates and words
+        record_list = list()
+        record_date = start_date + timedelta(days=-1)
+        for wotd in wotd_list:
+            record_date = record_date + timedelta(days=1)
+            value_list = list()
+            value_list.append(record_date.strftime('%Y-%m-%d'))
+            value_list.append(wotd)
+            record_list.append(value_list)
+            
+        # Get SQL query
+        result = pack_sql_insert('wotd', attribute_list, record_list)
+        
+        print(result)
+
+class OutputGenerator:
+    def __init__(self):
+        pass
+    
+    def pack_sql_value(self, value):
+        if '\'' in value:
+            value = value.replace('\'', '\'\'')
+        result = '\'' + value + '\''
+        return result
+    
+    def pack_sql_value_header(self, value):
+        result = '`' + value + '`'
+        return result
+    
+    def pack_sql_record(self, record_list, header=False):
+        count = -1
+        result = '('
+        for value in record_list:
+            count += 1
+            if header:
+                pack_value = self.pack_sql_value_header(value)
+            else:
+                pack_value = self.pack_sql_value(value)
+            
+            if count > 0:
+                result += ','
+            result += pack_value
+        
+        result += ')'
+        return result
+    
+    def pack_sql_insert(self, table, attribute_list, record_list):
+        result = 'INSERT INTO '
+        result += '`' + table + '` '
+        
+        attributes = self.pack_sql_record(self, attribute_list, True)
+        result += attributes
+        result += ' VALUES '
+        
+        record_count = -1
+        
+        for record in record_list:
+            # record_list contains a list within a list
+            record_count += 1
+            record_packed= ''
+            
+            if record_count > 0:
+                record_packed += ','
+            record_packed += '\n'
+            
+            record_packed += self.pack_sql_record(record)
+            result += record_packed
+        
+        return result
+
 # DASHBOARD
 wotd_db = WOTD_DB()
 dict_db = Dictionary_DB()
@@ -166,3 +332,11 @@ def test_function2():
         x = "is in database"
     print("{} {}".format(t.term, x))
     return 
+
+def test_function3():
+    config = configparser.ConfigParser()
+    config.read("../config.ini")
+    print(config['FILES']['input_dir'])
+    return
+
+test_function3()
