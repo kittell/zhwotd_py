@@ -8,63 +8,68 @@ import mysql.connector
 import configparser
 from os.path import expanduser, join
 import csv
+import json
 from datetime import datetime, date, timedelta
 from dateutil import parser
 
 # GENERAL DATABASE FUNCTIONS
-def connect_to_db():
-    # TODO: probably a better way to do this config reading than reading it every. single. time.
-    config = configparser.ConfigParser()
-    config.read("../config.ini")
+class DatabaseManager:
+    def __init__(self):
+        self.config = configparser.ConfigParser()
+        self.config.read("../config.ini")
+        db_file = self.config["FILES"]["db_file"]
+        db_file_dir = self.config["FILES"]["input_dir"]
+        self.db_file_fullpath = join(db_file_dir, db_file)
+        self.db_json = json.load(self.db_file_fullpath)
     
-    # TODO: abstract database settings out to config file
-    conn = mysql.connector.connect(user=config["DATABASE"]["user"], 
-                               password=config["DATABASE"]["password"], 
-                               host=config["DATABASE"]["host"], 
-                               database=config["DATABASE"]["database"])
-    return conn
+    def connect_to_db(self):
+        u = self.db_json['user']
+        p = self.db_json['password']
+        h = self.db_json['host']
+        d = self.db_json['database']
+        conn = mysql.connector.connect(user=u, password=p, host=h, database=d)
+        return conn
 
-
-def query_db(q, q_tuple=None):
-    conn = connect_to_db()
-    cursor = conn.cursor(dictionary=True)
-    
-    if q_tuple is None:
-        cursor.execute(q)
-    else:
-        cursor.execute(q, q_tuple)
-    
-    results = list()
-    for result in cursor:
-        results.append(result)
+    def query_db(self, q, q_tuple=None):
+        conn = self.connect_to_db()
+        cursor = conn.cursor(dictionary=True)
         
-    cursor.close()
-    conn.close()
-    return results
+        if q_tuple is None:
+            cursor.execute(q)
+        else:
+            cursor.execute(q, q_tuple)
+        
+        results = list()
+        for result in cursor:
+            results.append(result)
+            
+        cursor.close()
+        conn.close()
+        return results
     
 
-# SPECIFIC QUERIES
+class ZhwotdQuery:
 
-def select_wotd(d=None, w=None):
-    # Build query
-    if d is not None:
-        q = ("SELECT date, word FROM wotd WHERE date = %s")
-        q_tuple = (d.strftime('%Y-%m-%d'),)      # tuple with one value must have a comma...
-    elif w is not None:
-        q = ("SELECT date, word FROM wotd WHERE word = %s")
-        q_tuple = (w,)
+    def select_wotd(self, d=None, w=None):
+        # Build query
+        if d is not None:
+            q = ("SELECT date, word FROM wotd WHERE date = %s")
+            q_tuple = (d.strftime('%Y-%m-%d'),)      # tuple with one value must have a comma...
+        elif w is not None:
+            q = ("SELECT date, word FROM wotd WHERE word = %s")
+            q_tuple = (w,)
+        
+        result = query_db(q, q_tuple)
+        
+        return result
     
-    result = query_db(q, q_tuple)
-    
-    return result
-
-def select_term(term):
-    # Build query
-    q = ("SELECT * FROM dictionary WHERE term = %s")
-    q_tuple = (term,)      # tuple with one value must have a comma...
-    result = query_db(q, q_tuple)
-    
-    return result
+    def select_term(self, term):
+        # Build query
+        q = ("SELECT * FROM dictionary WHERE term = %s")
+        q_tuple = (term,)      # tuple with one value must have a comma...
+        result = query_db(q, q_tuple)
+        
+        return result
 
 # WOTD
 
