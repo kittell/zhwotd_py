@@ -3,6 +3,7 @@
 	<name>zhwotd_py</name>
 	<comment></comment>
 	<projects>
+		<project>pinyinparser</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>

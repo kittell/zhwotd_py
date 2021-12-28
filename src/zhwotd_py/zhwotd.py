@@ -11,6 +11,8 @@ import csv
 import json
 from datetime import datetime, date, timedelta
 from dateutil import parser
+from pinyinparser.parser import PinyinParser
+from sqlalchemy import select
 
 # GENERAL DATABASE FUNCTIONS
 class DatabaseManager:
@@ -48,29 +50,6 @@ class DatabaseManager:
         return results
     
 
-class ZhwotdQuery:
-
-    def select_wotd(self, d=None, w=None):
-        # Build query
-        if d is not None:
-            q = ("SELECT date, word FROM wotd WHERE date = %s")
-            q_tuple = (d.strftime('%Y-%m-%d'),)      # tuple with one value must have a comma...
-        elif w is not None:
-            q = ("SELECT date, word FROM wotd WHERE word = %s")
-            q_tuple = (w,)
-        
-        result = query_db(q, q_tuple)
-        
-        return result
-    
-    def select_term(self, term):
-        # Build query
-        q = ("SELECT * FROM dictionary WHERE term = %s")
-        q_tuple = (term,)      # tuple with one value must have a comma...
-        result = query_db(q, q_tuple)
-        
-        return result
-
 # WOTD
 
 class WOTD:
@@ -80,6 +59,7 @@ class WOTD:
         
     def is_in_database(self):
         result = False
+        z = ZhwotdQuery()
         
         if self.word is None:
             print("Term missing from WOTD entry")
@@ -146,7 +126,7 @@ class Term:
         if 'hsk' in term_dict:
             self.hsk = term_dict['hsk']
 
-class InputParser:
+class InputFileParser:
     def __init__(self):
         pass
     
@@ -160,8 +140,6 @@ class InputParser:
         input_file_wotd = 'zhwotd_input_wotd.txt'
         input_filepath_wotd = join(input_dir, input_file_wotd)
         
-        print(input_filepath_dictionary)
-        print(input_filepath_wotd)
         
     def parse_dictionary_input_csv(self, input_filepath):
         result = ''
@@ -254,7 +232,7 @@ class InputParser:
         
         print(result)
 
-class OutputGenerator:
+class QueryBuilder:
     def __init__(self):
         pass
     
@@ -306,6 +284,42 @@ class OutputGenerator:
             
             record_packed += self.pack_sql_record(record)
             result += record_packed
+        
+        return result
+
+class ZhwotdQuery:
+
+    def select_wotd(self, d=None, w=None):
+        """Select an entry from the WOTD database by either date or term
+        SELECT * FROM wotd WHERE date = {d}
+        SELECT * FROM wotd WHERE word = {w}
+        
+        Keyword arguments:
+        d -- date of Word of the Day
+        w -- Word of the Day (can appear on multiple dates)
+        """
+        
+        # Build query
+        if d is not None:
+            d_str = d.strftime('%Y-%m-%d')
+            q = select(wotd).where(wotd.c.date == d_str)
+            
+            # q = ("SELECT date, word FROM wotd WHERE date = %s")
+            # q_tuple = (d.strftime('%Y-%m-%d'),)      # tuple with one value must have a comma...
+        elif w is not None:
+            q = select(wotd).where(wotd.c.word == w)
+            # q = ("SELECT date, word FROM wotd WHERE word = %s")
+            # q_tuple = (w,)
+        
+        # result = query_db(q, q_tuple)
+        
+        return result
+    
+    def select_term(self, term):
+        # Build query
+        q = ("SELECT * FROM dictionary WHERE term = %s")
+        q_tuple = (term,)      # tuple with one value must have a comma...
+        result = query_db(q, q_tuple)
         
         return result
 
