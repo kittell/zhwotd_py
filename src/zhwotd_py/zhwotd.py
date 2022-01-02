@@ -12,11 +12,12 @@ import json
 from datetime import datetime, date, timedelta
 from dateutil import parser
 from pinyinparser.parser import PinyinParser
-from sqlalchemy import select
+import sqlalchemy
 
 # GENERAL DATABASE FUNCTIONS
 class DatabaseManager:
     def __init__(self):
+        # Load config file to get database connection details
         self.config = configparser.ConfigParser()
         self.config.read("../config.ini")
         db_file = self.config["FILES"]["db_file"]
@@ -24,40 +25,36 @@ class DatabaseManager:
         self.db_file_fullpath = join(db_file_dir, db_file)
         self.db_json = json.load(self.db_file_fullpath)
     
-    def connect_to_db(self):
+    def configure_engine(self):
+        """With details from config file, configure a SQLAlchemy engine
+        
+        https://docs.sqlalchemy.org/en/14/core/engines.html
+        """
         u = self.db_json['user']
         p = self.db_json['password']
         h = self.db_json['host']
         d = self.db_json['database']
-        conn = mysql.connector.connect(user=u, password=p, host=h, database=d)
-        return conn
+        db_url = 'mysql://' + u + ':' + p + '@' + h + '/' + d
+        engine = sqlalchemy.create_engine(db_url)
+        return engine
 
-    def query_db(self, q, q_tuple=None):
-        conn = self.connect_to_db()
-        cursor = conn.cursor(dictionary=True)
-        
-        if q_tuple is None:
-            cursor.execute(q)
-        else:
-            cursor.execute(q, q_tuple)
-        
-        results = list()
-        for result in cursor:
-            results.append(result)
-            
-        cursor.close()
-        conn.close()
-        return results
-    
 
 # WOTD
 
 class WOTD:
+    """Word of the Day entry
+    
+    Attributes:
+        d: date of entry
+        word: the word of the day itself
+    """
+    
     def __init__(self, d=None, word=None):
         self.d = d
         self.word = word
         
     def is_in_database(self):
+        # TODO: purpose of this? check if word is in dict?
         result = False
         z = ZhwotdQuery()
         
@@ -74,12 +71,59 @@ class WOTD:
 class WOTD_DB:
     def __init__(self):
         self.name = "wotd"
+        self.dm = DatabaseManager()
         
     def count_term_in_wotd_db(self, term):
         q_result = select_wotd(w=term.term)
         result = len(q_result)
         return result
     
+    def date_has_entry(self, d):
+        """Check if there is an existing entry for the given date
+        """
+        
+        result = False
+        d_str = d.strftime('%Y-%m-%d')
+        z = ZhwotdQuery()
+        
+        # Query 'wotd' table for this date; if >= 1 row, set result to true
+        engine = self.dm.configure_engine()
+        metadata = sqlalchemy.MetaData()
+        table_wotd = sqlalchemy.Table('wotd', metadata, autoload_with=engine)
+        col_date = sqlalchemy.column('date')
+        q = table_wotd.select().where(col_date == d_str)
+        
+        with engine.begin() as conn:
+            results = conn.execute(q)
+        
+        if len(results) > 0:
+            result = True
+        
+        return result
+    
+    def find_missing_date(self):
+        """Find any dates that have been skipped between the current min and max date entries
+        """
+        # TODO: find_missing_date()
+        return None
+    
+    def max_date(self):
+        """Find the max date in the wotd table
+        """
+        # TODO: max_date()
+        return None
+    
+    def min_date(self):
+        """Find the min date in the wotd table
+        """
+        # TODO: min_date()
+        return None
+    
+    def count_entries(self):
+        """Count the number of entries in the wotd table
+        """
+        # TODO: count_entries()
+        return None
 
 # DICTIONARY
 
@@ -127,21 +171,31 @@ class Term:
             self.hsk = term_dict['hsk']
 
 class InputFileParser:
+    """Processes files for bulk importing of dictionary and WOTD data
+    """
     def __init__(self):
-        pass
+        self.p = PinyinParser()
+        self.get_input_file_settings()
     
     def get_input_file_settings(self):
+        """Get info about where to load files
+        """
+        
+        # TODO: too much hardcoding; offload somewhere (config file?)
+        # TODO: maybe absorb back into __init__
         input_dir = expanduser('~')
         input_dir = join(input_dir,'Dropbox','zhwotd')
         
         input_file_dictionary = 'zhwotd_input_dictionary.csv'
-        input_filepath_dictionary = join(input_dir, input_file_dictionary)
+        self.input_filepath_dictionary = join(input_dir, input_file_dictionary)
         
         input_file_wotd = 'zhwotd_input_wotd.txt'
-        input_filepath_wotd = join(input_dir, input_file_wotd)
+        self.input_filepath_wotd = join(input_dir, input_file_wotd)
         
         
     def parse_dictionary_input_csv(self, input_filepath):
+        """Parse input from csv file to import to dictionary table
+        """
         result = ''
         header = list()
         
@@ -172,10 +226,11 @@ class InputFileParser:
                     
                     else:
                         if col_count == col_pinyin:
-                            # Parse pinyin entry
-                            col = parse_pinyin_entry(col)
+                            # Parse pinyin entry (e.g., convert from tone numbers to diacritics)
+                            col = self.p.parse_pinyin_entry(col)
                         elif col_count == col_hsk and col_count == '':
                             # if this entry is blank, set it to zero
+                            # TODO: if entry is anything but 1 to 5, set it to zero
                             col = '0'
     
                         row_result.append(col)
@@ -186,12 +241,16 @@ class InputFileParser:
                     record_list.append(row_result)
         
         # After extracting info from file, create the SQL query
+        # TODO: replace with SQLAlchemy equivalent; maybe goes to ZhwotdQuery()
         result = pack_sql_insert('dictionary', header, record_list)
                     
         return result
     
     
     def parse_wotd_input(self, input_filepath):
+        """Parse input from file (csv or txt) to import to wotd table
+        """
+        
         # Input is a list of words, one per line
         # No dates given--ask user for first date in the series
         
@@ -232,60 +291,6 @@ class InputFileParser:
         
         print(result)
 
-class QueryBuilder:
-    def __init__(self):
-        pass
-    
-    def pack_sql_value(self, value):
-        if '\'' in value:
-            value = value.replace('\'', '\'\'')
-        result = '\'' + value + '\''
-        return result
-    
-    def pack_sql_value_header(self, value):
-        result = '`' + value + '`'
-        return result
-    
-    def pack_sql_record(self, record_list, header=False):
-        count = -1
-        result = '('
-        for value in record_list:
-            count += 1
-            if header:
-                pack_value = self.pack_sql_value_header(value)
-            else:
-                pack_value = self.pack_sql_value(value)
-            
-            if count > 0:
-                result += ','
-            result += pack_value
-        
-        result += ')'
-        return result
-    
-    def pack_sql_insert(self, table, attribute_list, record_list):
-        result = 'INSERT INTO '
-        result += '`' + table + '` '
-        
-        attributes = self.pack_sql_record(self, attribute_list, True)
-        result += attributes
-        result += ' VALUES '
-        
-        record_count = -1
-        
-        for record in record_list:
-            # record_list contains a list within a list
-            record_count += 1
-            record_packed= ''
-            
-            if record_count > 0:
-                record_packed += ','
-            record_packed += '\n'
-            
-            record_packed += self.pack_sql_record(record)
-            result += record_packed
-        
-        return result
 
 class ZhwotdQuery:
 
