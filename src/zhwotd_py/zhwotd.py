@@ -52,30 +52,28 @@ class WOTD:
     def __init__(self, d=None, word=None):
         self.d = d
         self.word = word
-        
-    def is_in_database(self):
-        # TODO: purpose of this? check if word is in dict?
-        result = False
-        z = ZhwotdQuery()
-        
-        if self.word is None:
-            print("Term missing from WOTD entry")
-        else:
-            q_result = select_wotd(w=self.word)
-        
-        if len(q_result) > 0:
-            result = True
-            
-        return result
+
 
 class WOTD_DB:
+    """Class that represents online Word of the Day database
+    """
+    
     def __init__(self):
-        self.name = "wotd"
+        self.table_name = "wotd"
         self.dm = DatabaseManager()
+        self.date_max = self.get_date_max()
+        self.date_min = self.get_date_min()
         
-    def count_term_in_wotd_db(self, term):
-        q_result = select_wotd(w=term.term)
-        result = len(q_result)
+    def count_all_entries(self, term):
+        # Query 'wotd' table for all; count
+        engine = self.dm.configure_engine()
+        metadata = sqlalchemy.MetaData()
+        table_wotd = sqlalchemy.Table('wotd', metadata, autoload_with=engine)
+        q = sqlalchemy.select(sqlalchemy.func.count()).select_from(table_wotd)
+        
+        with engine.begin() as conn:
+            result = conn.execute(q).scalar()
+        
         return result
     
     def date_has_entry(self, d):
@@ -84,7 +82,6 @@ class WOTD_DB:
         
         result = False
         d_str = d.strftime('%Y-%m-%d')
-        z = ZhwotdQuery()
         
         # Query 'wotd' table for this date; if >= 1 row, set result to true
         engine = self.dm.configure_engine()
@@ -101,35 +98,53 @@ class WOTD_DB:
         
         return result
     
+    def count_word_instances(self, word):
+        """Count number of times a given word has been used as WOTD
+        """
+        
+        # TODO: replace with func.count
+        
+        # Query 'wotd' table for this word; count
+        engine = self.dm.configure_engine()
+        metadata = sqlalchemy.MetaData()
+        table_wotd = sqlalchemy.Table('wotd', metadata, autoload_with=engine)
+        col_word = sqlalchemy.column('word')
+        q = table_wotd.select().where(col_word == word)
+        
+        with engine.begin() as conn:
+            results = conn.execute(q)
+        
+        result = len(results)
+        
+        return result
+    
     def find_missing_date(self):
         """Find any dates that have been skipped between the current min and max date entries
         """
         # TODO: find_missing_date()
         return None
     
-    def max_date(self):
+    def get_date_max(self):
         """Find the max date in the wotd table
         """
         # TODO: max_date()
         return None
     
-    def min_date(self):
+    def get_date_min(self):
         """Find the min date in the wotd table
         """
         # TODO: min_date()
         return None
     
-    def count_entries(self):
-        """Count the number of entries in the wotd table
-        """
-        # TODO: count_entries()
-        return None
 
 # DICTIONARY
 
 class Dictionary_DB:
+    """Class that represents online dictionary database
+    """
+    
     def __init__(self):
-        self.name = "dictionary"
+        self.table_name = "dictionary"
     
     def is_term_in_dictionary(self, term):
         q_result = select_term(term.term)
