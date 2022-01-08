@@ -64,7 +64,7 @@ class WOTD_DB:
         self.date_max = self.get_date_max()
         self.date_min = self.get_date_min()
         
-    def count_all_entries(self, term):
+    def q_count_all_entries(self, term):
         # Query 'wotd' table for all; count
         engine = self.dm.configure_engine()
         metadata = sqlalchemy.MetaData()
@@ -76,7 +76,7 @@ class WOTD_DB:
         
         return result
     
-    def date_has_entry(self, d):
+    def q_date_has_entry(self, d):
         """Check if there is an existing entry for the given date
         """
         
@@ -98,43 +98,57 @@ class WOTD_DB:
         
         return result
     
-    def count_word_instances(self, word):
+    def q_count_word_instances(self, word):
         """Count number of times a given word has been used as WOTD
         """
-        
-        # TODO: replace with func.count
         
         # Query 'wotd' table for this word; count
         engine = self.dm.configure_engine()
         metadata = sqlalchemy.MetaData()
         table_wotd = sqlalchemy.Table('wotd', metadata, autoload_with=engine)
         col_word = sqlalchemy.column('word')
-        q = table_wotd.select().where(col_word == word)
+        q = sqlalchemy.select(sqlalchemy.func.count()).select_from(table_wotd).where(col_word == word)
         
         with engine.begin() as conn:
-            results = conn.execute(q)
-        
-        result = len(results)
+            result = conn.execute(q).scalar()
         
         return result
     
-    def find_missing_date(self):
+    def q_find_missing_date(self):
         """Find any dates that have been skipped between the current min and max date entries
         """
         # TODO: find_missing_date()
         return None
     
-    def get_date_max(self):
+    def q_get_date_max(self):
         """Find the max date in the wotd table
         """
-        # TODO: max_date()
-        return None
+        
+        engine = self.dm.configure_engine()
+        metadata = sqlalchemy.MetaData()
+        table_wotd = sqlalchemy.Table('wotd', metadata, autoload_with=engine)
+        col_date = sqlalchemy.column('date')
+        
+        q = sqlalchemy.select(sqlalchemy.func.max(col_date)).select_from(table_wotd)
+        with engine.begin() as conn:
+            result = conn.execute(q).scalar()
     
-    def get_date_min(self):
+        return result
+    
+    def q_get_date_min(self):
         """Find the min date in the wotd table
         """
-        # TODO: min_date()
-        return None
+        
+        engine = self.dm.configure_engine()
+        metadata = sqlalchemy.MetaData()
+        table_wotd = sqlalchemy.Table('wotd', metadata, autoload_with=engine)
+        col_date = sqlalchemy.column('date')
+        
+        q = sqlalchemy.select(sqlalchemy.func.min(col_date)).select_from(table_wotd)
+        with engine.begin() as conn:
+            result = conn.execute(q).scalar()
+    
+        return result
     
 
 # DICTIONARY
@@ -146,11 +160,28 @@ class Dictionary_DB:
     def __init__(self):
         self.table_name = "dictionary"
     
-    def is_term_in_dictionary(self, term):
-        q_result = select_term(term.term)
+    def q_get_term(self, term):
+        """Return dictionary entry for term
+        """
+    
+    def q_is_term_in_dictionary(self, term):
+        """Check if term is in dictionary
+        """
+        
+        # Query 'wotd' table for this date; if >= 1 row, set result to true
         result = False
-        if len(q_result) > 0:
+        engine = self.dm.configure_engine()
+        metadata = sqlalchemy.MetaData()
+        table_dictionary = sqlalchemy.Table('dictionary', metadata, autoload_with=engine)
+        col_term = sqlalchemy.column('term')
+        q = table_dictionary.select().where(col_term == term)
+        
+        with engine.begin() as conn:
+            results = conn.execute(q)
+        
+        if len(results) > 0:
             result = True
+        
         return result
         
     def add_terms_to_dictionary(self, terms):
@@ -307,42 +338,6 @@ class InputFileParser:
         print(result)
 
 
-class ZhwotdQuery:
-
-    def select_wotd(self, d=None, w=None):
-        """Select an entry from the WOTD database by either date or term
-        SELECT * FROM wotd WHERE date = {d}
-        SELECT * FROM wotd WHERE word = {w}
-        
-        Keyword arguments:
-        d -- date of Word of the Day
-        w -- Word of the Day (can appear on multiple dates)
-        """
-        
-        # Build query
-        if d is not None:
-            d_str = d.strftime('%Y-%m-%d')
-            q = select(wotd).where(wotd.c.date == d_str)
-            
-            # q = ("SELECT date, word FROM wotd WHERE date = %s")
-            # q_tuple = (d.strftime('%Y-%m-%d'),)      # tuple with one value must have a comma...
-        elif w is not None:
-            q = select(wotd).where(wotd.c.word == w)
-            # q = ("SELECT date, word FROM wotd WHERE word = %s")
-            # q_tuple = (w,)
-        
-        # result = query_db(q, q_tuple)
-        
-        return result
-    
-    def select_term(self, term):
-        # Build query
-        q = ("SELECT * FROM dictionary WHERE term = %s")
-        q_tuple = (term,)      # tuple with one value must have a comma...
-        result = query_db(q, q_tuple)
-        
-        return result
-
 # DASHBOARD
 wotd_db = WOTD_DB()
 dict_db = Dictionary_DB()
@@ -350,32 +345,3 @@ dict_db = Dictionary_DB()
 
 # TEST
     
-def test_function():
-    # out-of-date - term input needs to be dict
-    t = Term(term="能力")
-    result = wotd_db.count_term_in_wotd_db(t)
-    
-    x = "is not in database"
-    if result > 0:
-        x = "is in database"
-    print("{} {}".format(t.term, x))
-    return 
-
-def test_function2():
-    # out-of-date - term input needs to be dict
-    t = Term(term="能力")
-    result = dict_db.is_term_in_dictionary(t)
-    
-    x = "is not in database"
-    if result > 0:
-        x = "is in database"
-    print("{} {}".format(t.term, x))
-    return 
-
-def test_function3():
-    config = configparser.ConfigParser()
-    config.read("../config.ini")
-    print(config['FILES']['input_dir'])
-    return
-
-test_function3()
