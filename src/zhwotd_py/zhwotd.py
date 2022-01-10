@@ -219,6 +219,7 @@ class Term:
 class InputFileParser:
     """Processes files for bulk importing of dictionary and WOTD data
     """
+    
     def __init__(self):
         self.p = PinyinParser()
         self.get_input_file_settings()
